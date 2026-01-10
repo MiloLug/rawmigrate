@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rawmigrate"
+version = "0.0.1"
+description = "Migration tool close to the real DB schema declaration"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "rawmigrate contributors"}
+]
+keywords = ["sql", "db", "postgres", "migration", "performance"]
+classifiers = [
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Hardware",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+# [project.scripts]
+# hwmon = "hwmon.main:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.0",
+    "ruff>=0.14.10",
+    "uv",
+]
+build = [
+]
