@@ -48,8 +48,6 @@ class DB:
         syntax: Syntax | None = None,
     ):
         self.syntax = syntax or Syntax()
-        # just example for now
-        self.entity_storage = {}  # type: ignore
 
 
 class SqlFormatOption(StrEnum):

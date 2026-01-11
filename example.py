@@ -70,4 +70,4 @@ print("======================")
 print(format(handle_new_subscription.body, SqlFormatOption.SQL_META))
 print("======================")
 
-print(db.entity_storage)
+print(root.registry.topological_order())

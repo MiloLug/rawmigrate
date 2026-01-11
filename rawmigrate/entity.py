@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 from typing import TYPE_CHECKING
 
+from rawmigrate.utils import hash_str
+
 
 if TYPE_CHECKING:
     from rawmigrate.entity_manager import EntityManager
@@ -55,3 +57,11 @@ class DBEntity(ABC):
     def from_dict[R: DBEntity](
         cls: type[R], manager: "EntityManager", entity_ref: str, data: dict
     ) -> R: ...
+
+    def __hash__(self) -> int:
+        return hash_str(self.ref)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DBEntity):
+            return False
+        return self.ref == other.ref

@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Self
+from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self
 from rawmigrate.core import DB
+import graphlib
 
 from rawmigrate.entities.table import Table
 from rawmigrate.entities.index import Index
@@ -12,15 +14,72 @@ if TYPE_CHECKING:
     from rawmigrate.entity import DBEntity
 
 
+@dataclass(slots=True, kw_only=True)
+class EntityNode:
+    entity: DBEntity
+    dependencies: set["EntityNode"]
+    dependants: set["EntityNode"]
+
+    def __hash__(self) -> int:
+        return self.entity.__hash__()
+
+    def __eq__(self, other: object) -> bool:
+        return self.entity.__eq__(other)
+
+
 class EntityRegistry:
     def __init__(self):
-        self._entities = {}
+        self._registry: dict[str, EntityNode] = dict()
+        self._ref_adjacency: dict[str, set[str]] = dict()
+        self._roots: set[EntityNode] = set()
 
     def register(self, entity: DBEntity):
-        self._entities[entity.ref] = entity
+        """
+        Register an entity in the registry and update the tree of dependencies.
+        """
+        dependencies = {
+            self._registry[dependency_ref] for dependency_ref in entity.dependency_refs
+        }
+        node = EntityNode(entity=entity, dependencies=dependencies, dependants=set())
+        for dependency in dependencies:
+            dependency.dependants.add(node)
+
+        self._registry[entity.ref] = node
+        self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
+        if not dependencies:
+            self._roots.add(node)
 
     def update_node(self, entity: DBEntity):
-        pass
+        """
+        Update the node of this entity, recomputing dependencies and dependants.
+        """
+        node = self._registry[entity.ref]
+        for dependency in node.dependencies:
+            dependency.dependants.discard(node)
+        node.dependencies = {
+            self._registry[dependency_ref] for dependency_ref in entity.dependency_refs
+        }
+        for dependency in node.dependencies:
+            dependency.dependants.add(node)
+        # No need to recompute dependants,
+        # since changing a node can't make its dependants not-depend on it
+
+        self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
+        self._roots.discard(node)
+        if not node.dependencies:
+            self._roots.add(node)
+
+    def topological_order(self) -> Generator[EntityNode]:
+        """
+        Return topological order of the entities in the registry.
+        """
+        return (
+            self._registry[ref]
+            for ref in graphlib.TopologicalSorter(self._ref_adjacency).static_order()
+        )
+
+    def get_node(self, ref: str) -> EntityNode:
+        return self._registry[ref]
 
 
 class EntityManager:
@@ -63,6 +122,7 @@ class EntityManager:
                 raise ValueError("db is required")
             if not registry:
                 raise ValueError("registry is required")
+            self._db = db
             self._root = self
             self._schema = schema
             self._registry = registry
@@ -113,7 +173,7 @@ class EntityManager:
     def create_root(
         cls, db: DB, registry: EntityRegistry | None = None
     ) -> "EntityManager":
-        return cls(db=db, registry=registry)
+        return cls(db=db, registry=registry or EntityRegistry())
 
     def after(self, *entities: DBEntity) -> "EntityManager":
         """
