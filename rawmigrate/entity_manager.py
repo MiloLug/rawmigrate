@@ -31,7 +31,6 @@ class EntityRegistry:
     def __init__(self):
         self._registry: dict[str, EntityNode] = dict()
         self._ref_adjacency: dict[str, set[str]] = dict()
-        self._roots: set[EntityNode] = set()
 
     def register(self, entity: DBEntity):
         """
@@ -46,8 +45,6 @@ class EntityRegistry:
 
         self._registry[entity.ref] = node
         self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
-        if not dependencies:
-            self._roots.add(node)
 
     def update_node(self, entity: DBEntity):
         """
@@ -63,11 +60,7 @@ class EntityRegistry:
             dependency.dependants.add(node)
         # No need to recompute dependants,
         # since changing a node can't make its dependants not-depend on it
-
         self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
-        self._roots.discard(node)
-        if not node.dependencies:
-            self._roots.add(node)
 
     def topological_order(self) -> Generator[EntityNode]:
         """
