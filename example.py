@@ -70,4 +70,6 @@ print("======================")
 print(format(handle_new_subscription.body, SqlFormatOption.SQL_META))
 print("======================")
 
-print(root.registry.topological_order())
+
+for node in root.registry.topological_order():
+    print(node.entity.ref, "->", node.entity.dependency_refs)
