@@ -10,7 +10,7 @@ class Schema(SqlIdentifier, DBEntity):
     def __init__(self, manager: "EntityManager", entity_ref: str, name: str):
         self.name = name
         DBEntity.__init__(self, manager, entity_ref)
-        SqlIdentifier.__init__(self, manager.db.syntax, [name], [self.ref])
+        SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
     def create(

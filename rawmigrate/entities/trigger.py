@@ -37,7 +37,7 @@ class Trigger(SqlIdentifier, DBEntity):
         self.function = function
         self.procedure = procedure
         DBEntity.__init__(self, manager, entity_ref)
-        SqlIdentifier.__init__(self, manager.db.syntax, [name], [self.ref])
+        SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
     def create(

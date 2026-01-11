@@ -12,20 +12,61 @@ if TYPE_CHECKING:
     from rawmigrate.entity import DBEntity
 
 
+class EntityRegistry:
+    def __init__(self):
+        self._entities = {}
+
+    def register(self, entity: DBEntity):
+        self._entities[entity.ref] = entity
+
+    def update_node(self, entity: DBEntity):
+        pass
+
+
 class EntityManager:
     def __init__(
         self,
-        db: DB,
-        schema: Schema | None = None,
         parent: "EntityManager | None" = None,
-        dependencies: set[str] = set(),
+        db: DB | None = None,
+        schema: Schema | None = None,
+        registry: EntityRegistry | None = None,
+        dependencies: set[str] | None = None,
     ):
-        self._db = db
+        """
+        Args:
+            parent: The parent entity manager
+            db: The database to use
+                default = parent db, if no parent provided - error
+            schema: The schema to use
+                default = parent schema or None
+            registry: The registry to use
+                default = parent registry, if no parent provided - error
+            dependencies: Default dependencies to use in entities created by this manager
+                default = parent dependencies or empty set
+        """
         self._parent = parent
-        self._schema = schema
-        self._dependencies = dependencies
-
-        self._root: EntityManager = (parent._root or parent) if parent else self
+        self._root: EntityManager
+        self._db: DB
+        self._schema: Schema | None
+        self._dependencies: set[str]
+        self._registry: EntityRegistry
+        if parent:
+            self._root = parent._root or parent
+            self._db = db or parent._db
+            self._schema = schema or parent._schema
+            self._dependencies = (
+                dependencies if dependencies is not None else (parent._dependencies)
+            )
+            self._registry = registry or parent._registry
+        else:
+            if not db:
+                raise ValueError("db is required")
+            if not registry:
+                raise ValueError("registry is required")
+            self._root = self
+            self._schema = schema
+            self._registry = registry
+            self._dependencies = dependencies or set()
 
         self.Table = self._wrap_entity_factory(Table.create)
         self.Index = self._wrap_entity_factory(Index.create)
@@ -40,10 +81,13 @@ class EntityManager:
         @functools.wraps(entity_factory)
         def factory(*args, **kwargs) -> E:
             entity = entity_factory(self, *args, **kwargs)
-            self._db.entity_storage[entity.ref] = entity
+            self._registry.register(entity)
             return entity
 
         return factory
+
+    def update_refs(self, entity: DBEntity):
+        self._registry.update_node(entity)
 
     @property
     def db(self) -> DB:
@@ -61,26 +105,47 @@ class EntityManager:
     def root(self) -> "EntityManager":
         return self._root
 
+    @property
+    def registry(self) -> EntityRegistry:
+        return self._registry
+
     @classmethod
-    def create_root(cls, db: DB, schema: Schema | None = None) -> "EntityManager":
-        return cls(
-            db=db,
-            schema=schema,
-            dependencies={schema.ref} if schema else set(),
-        )
+    def create_root(
+        cls, db: DB, registry: EntityRegistry | None = None
+    ) -> "EntityManager":
+        return cls(db=db, registry=registry)
 
     def after(self, *entities: DBEntity) -> "EntityManager":
+        """
+        Create a new entity manager with the given entities as dependencies.
+        Previous dependencies NOT preserved.
+
+        Usage::
+
+            # my_other_table will have my_table as a dependency
+            manager.after(manager.Table("my_table")).Table("my_other_table")
+
+            # to clear dependencies
+            manager_with_deps = manager.after(manager.Table("my_table"))
+            manager_without_deps = manager_with_deps.after()
+
+        Returns:
+            A NEW entity manager
+        """
         return EntityManager(
-            db=self._db,
-            schema=self._schema,
             parent=self,
             dependencies={entity.ref for entity in entities},
         )
 
     def with_schema(self, schema: Schema) -> "EntityManager":
-        return EntityManager(
-            db=self._db,
-            schema=schema,
-            parent=self,
-            dependencies=self._dependencies,
-        )
+        """
+        Create a new entity manager with the given schema. Dependencies are preserved.
+
+        Usage::
+
+            manager.with_schema(manager.Schema("my_schema"))
+
+        Returns:
+            A NEW entity manager
+        """
+        return EntityManager(parent=self, schema=schema)

@@ -44,7 +44,7 @@ class Table(SqlIdentifier, DBEntity):
         self._additional_expressions = additional_expressions
         self.c = TableColumnsAccessor(self)
         DBEntity.__init__(self, manager, entity_ref)
-        SqlIdentifier.__init__(self, manager.db.syntax, [name], [self.ref])
+        SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
     def create(
@@ -77,6 +77,7 @@ class Table(SqlIdentifier, DBEntity):
         self._additional_expressions.extend(
             SqlText(self._manager.db.syntax, expression) for expression in expressions
         )
+        self._manager.update_refs(self)
         return self
 
     def _infer_dependency_refs(self) -> set[str]:
