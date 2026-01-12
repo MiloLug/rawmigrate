@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self, cast
+from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self
 from rawmigrate.core import DB
 import graphlib
 
@@ -78,16 +78,15 @@ class EntityRegistry:
             if not allow_none:
                 raise ValueError(f"Node for Entity {ref} not found")
             return None
-
-    def get_entity[T: DBEntity](self, ref: str, allow_none: bool = False) -> T | None:
+    
+    def get_entity(self, ref: str, allow_none: bool = False) -> DBEntity | None:
         try:
-            entity = self._registry[ref].entity
-            return cast(T, entity)
+            return self._registry[ref].entity
         except KeyError:
             if not allow_none:
                 raise ValueError(f"Entity {ref} not found")
             return None
-
+    
     def __contains__(self, ref: str) -> bool:
         return ref in self._registry
 
@@ -232,13 +231,12 @@ class EntityManager:
 
     def export_dicts(self) -> list[dict]:
         return [
-            node.entity.to_dict()
-            | {
+            node.entity.to_dict() | {
                 "type": node.entity.__class__.__name__,
             }
             for node in self.registry.topological_order()
         ]
-
+    
     def import_dicts(self, data: list[dict]):
         for entity_data in data:
             entity_class = self._entity_classes[entity_data["type"]]

@@ -6,7 +6,6 @@ from rawmigrate.utils import hash_str
 
 
 if TYPE_CHECKING:
-    from rawmigrate.entities.schema import Schema
     from rawmigrate.entity_manager import EntityManager
 
 
@@ -73,7 +72,7 @@ class SchemaDependantEntity(DBEntity):
         self,
         manager: "EntityManager",
         entity_ref: str,
-        schema: "Schema | None",
+        schema: "DBEntity | None",
         dependencies: set[str] | None,
     ):
         super().__init__(manager, entity_ref, dependencies)
@@ -83,7 +82,7 @@ class SchemaDependantEntity(DBEntity):
     def create_ref(
         cls: type["SchemaDependantEntity"],
         name: str,
-        schema: "Schema | None",
+        schema: "DBEntity | None",
         *args,
         **kwargs,
     ) -> str:

@@ -6,7 +6,7 @@ from rawmigrate.entity import SchemaDependantEntity
 from rawmigrate.core import SqlIdentifier
 
 if TYPE_CHECKING:
-    from rawmigrate.entities.schema import Schema
+    from rawmigrate.entity import DBEntity
     from rawmigrate.entity_manager import EntityManager
 
 
@@ -15,7 +15,7 @@ class Function(SqlIdentifier, SchemaDependantEntity):
         self,
         manager: "EntityManager",
         entity_ref: str,
-        schema: "Schema | None",
+        schema: "DBEntity | None",
         dependencies: set[str] | None,
         name: str,
         args: OrderedDict[str, SqlText],
