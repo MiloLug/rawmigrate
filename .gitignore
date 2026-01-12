@@ -168,3 +168,5 @@ tmp-schema.yml
 .artifacts
 .venv-build
 .ruff_cache
+
+export.json
