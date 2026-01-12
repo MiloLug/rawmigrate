@@ -3,10 +3,11 @@ from typing import Iterator, Self, override
 from typing import TYPE_CHECKING
 
 from rawmigrate.core import SqlText, SqlTextLike
-from rawmigrate.entity import DBEntity
+from rawmigrate.entity import SchemaDependantEntity
 from rawmigrate.core import SqlIdentifier
 
 if TYPE_CHECKING:
+    from rawmigrate.entities.schema import Schema
     from rawmigrate.entity_manager import EntityManager
 
 
@@ -30,11 +31,13 @@ class TableColumnsAccessor:
         return len(self.table._columns)
 
 
-class Table(SqlIdentifier, DBEntity):
+class Table(SqlIdentifier, SchemaDependantEntity):
     def __init__(
         self,
         manager: "EntityManager",
         entity_ref: str,
+        schema: "Schema | None",
+        dependencies: set[str] | None,
         name: str,
         columns: dict[str, tuple[SqlIdentifier, SqlText]],
         additional_expressions: list[SqlText],
@@ -43,7 +46,7 @@ class Table(SqlIdentifier, DBEntity):
         self._columns = columns
         self._additional_expressions = additional_expressions
         self.c = TableColumnsAccessor(self)
-        DBEntity.__init__(self, manager, entity_ref)
+        SchemaDependantEntity.__init__(self, manager, entity_ref, schema, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -55,10 +58,12 @@ class Table(SqlIdentifier, DBEntity):
         _table_expressions: list[SqlTextLike] = [],
         **columns: SqlTextLike,
     ):
-        entity_ref = _entity_ref or cls.create_ref(_manager, _name)
+        entity_ref = _entity_ref or cls.create_ref(_name, schema=_manager.schema)
         return cls(
             manager=_manager,
             entity_ref=entity_ref,
+            schema=_manager.schema,
+            dependencies=_manager.dependency_refs,
             name=_name,
             columns={
                 column_name: (
@@ -85,15 +90,14 @@ class Table(SqlIdentifier, DBEntity):
             *(value.references for _, value in self._columns.values()),
             *(expression.references for expression in self._additional_expressions),
         )
-        if not deps and self._manager.schema:
-            deps.add(self._manager.schema.ref)
-
         return deps
 
     @override
     def to_dict(self) -> dict:
         return {
             "name": self._name,
+            "schema": self._schema.ref if self._schema else None,
+            "ref": self.ref,
             "columns": {
                 column_name: text.sql
                 for column_name, (_, text) in self._columns.items()
@@ -101,18 +105,23 @@ class Table(SqlIdentifier, DBEntity):
             "additional_expressions": [
                 expression.sql for expression in self._additional_expressions
             ],
+            "dependencies": list(self.dependency_refs),
         }
 
     @override
     @classmethod
-    def from_dict(cls, manager: "EntityManager", entity_ref: str, data: dict):
+    def from_dict(cls, manager: "EntityManager", data: dict):
         return cls(
             manager=manager,
-            entity_ref=entity_ref,
+            entity_ref=data["ref"],
+            schema=manager.registry.get_entity(data["schema"])
+            if data["schema"]
+            else None,
+            dependencies=set(data["dependencies"]),
             name=data["name"],
             columns={
                 column_name: (
-                    SqlIdentifier(manager.db.syntax, [column_name], [entity_ref]),
+                    SqlIdentifier(manager.db.syntax, [column_name], [data["ref"]]),
                     SqlText(manager.db.syntax, text),
                 )
                 for column_name, text in data["columns"].items()

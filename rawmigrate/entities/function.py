@@ -2,18 +2,21 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, OrderedDict, override
 
 from rawmigrate.core import SqlText, SqlTextLike
-from rawmigrate.entity import DBEntity
+from rawmigrate.entity import SchemaDependantEntity
 from rawmigrate.core import SqlIdentifier
 
 if TYPE_CHECKING:
+    from rawmigrate.entities.schema import Schema
     from rawmigrate.entity_manager import EntityManager
 
 
-class Function(SqlIdentifier, DBEntity):
+class Function(SqlIdentifier, SchemaDependantEntity):
     def __init__(
         self,
         manager: "EntityManager",
         entity_ref: str,
+        schema: "Schema | None",
+        dependencies: set[str] | None,
         name: str,
         args: OrderedDict[str, SqlText],
         returns: SqlText,
@@ -25,7 +28,7 @@ class Function(SqlIdentifier, DBEntity):
         self.language = language
         self.body = body
         self.args = args
-        DBEntity.__init__(self, manager, entity_ref)
+        SchemaDependantEntity.__init__(self, manager, entity_ref, schema, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -47,11 +50,15 @@ class Function(SqlIdentifier, DBEntity):
             }
         )
         args_hash = hash(tuple(cleaned_args.values()))
-        entity_ref = _entity_ref or cls.create_ref(_manager, f"{_name}.{args_hash}")
+        entity_ref = _entity_ref or cls.create_ref(
+            f"{_name}.{args_hash}", schema=_manager.schema
+        )
 
         return cls(
             manager=_manager,
             entity_ref=entity_ref,
+            schema=_manager.schema,
+            dependencies=_manager.dependency_refs,
             name=_name,
             args=cleaned_args,
             returns=SqlText(_manager.db.syntax, returns),
@@ -60,27 +67,33 @@ class Function(SqlIdentifier, DBEntity):
         )
 
     def _infer_dependency_refs(self) -> set[str]:
-        deps = self.returns.references | self.body.references
-        if not deps and self._manager.schema:
-            deps.add(self._manager.schema.ref)
-        return deps
+        return self.returns.references | self.body.references
 
     @override
     def to_dict(self) -> dict:
         return {
             "name": self.name,
+            "schema": self._schema.ref if self._schema else None,
+            "ref": self.ref,
             "returns": self.returns.sql,
             "language": self.language,
             "body": self.body.sql,
-            "args": [arg.sql for arg in self.args.values()],
+            "args": {
+                arg_name: arg_value.sql for arg_name, arg_value in self.args.items()
+            },
+            "dependencies": list(self.dependency_refs),
         }
 
     @override
     @classmethod
-    def from_dict(cls, manager: "EntityManager", entity_ref: str, data: dict):
+    def from_dict(cls, manager: "EntityManager", data: dict):
         return cls(
             manager=manager,
-            entity_ref=entity_ref,
+            entity_ref=data["ref"],
+            schema=manager.registry.get_entity(data["schema"])
+            if data["schema"]
+            else None,
+            dependencies=set(data["dependencies"]),
             name=data["name"],
             args=OrderedDict(
                 {

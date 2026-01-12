@@ -13,6 +13,7 @@ class Trigger(SqlIdentifier, DBEntity):
         self,
         manager: "EntityManager",
         entity_ref: str,
+        dependencies: set[str] | None,
         name: str,
         before: str | None,
         after: str | None,
@@ -36,7 +37,7 @@ class Trigger(SqlIdentifier, DBEntity):
         self.on = on
         self.function = function
         self.procedure = procedure
-        DBEntity.__init__(self, manager, entity_ref)
+        DBEntity.__init__(self, manager, entity_ref, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -53,10 +54,11 @@ class Trigger(SqlIdentifier, DBEntity):
         function: SqlTextLike | None = None,
         procedure: SqlTextLike | None = None,
     ):
-        entity_ref = _entity_ref or cls.create_ref(_manager, _name)
+        entity_ref = _entity_ref or cls.create_ref(_name)
         return cls(
             manager=_manager,
             entity_ref=entity_ref,
+            dependencies=_manager.dependency_refs,
             name=_name,
             before=before,
             after=after,
@@ -77,20 +79,23 @@ class Trigger(SqlIdentifier, DBEntity):
     def to_dict(self) -> dict:
         return {
             "name": self.name,
+            "ref": self.ref,
             "before": self.before,
             "after": self.after,
             "instead_of": self.instead_of,
             "on": self.on.sql,
             "function": self.function.sql if self.function else "",
             "procedure": self.procedure.sql if self.procedure else "",
+            "dependencies": list(self.dependency_refs),
         }
 
     @override
     @classmethod
-    def from_dict(cls, manager: "EntityManager", entity_ref: str, data: dict):
+    def from_dict(cls, manager: "EntityManager", data: dict):
         return cls(
             manager=manager,
-            entity_ref=entity_ref,
+            entity_ref=data["ref"],
+            dependencies=set(data["dependencies"]),
             name=data["name"],
             before=data["before"],
             after=data["after"],

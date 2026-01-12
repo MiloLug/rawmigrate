@@ -1,0 +1,87 @@
+[
+    {
+        "name": "public",
+        "ref": "Schema:public",
+        "dependencies": [],
+        "type": "Schema"
+    },
+    {
+        "name": "user",
+        "schema": "Schema:public",
+        "ref": "Schema:public|Table:user",
+        "columns": {
+            "id": "uuid primary key default uuid_generate_v4()",
+            "name": "varchar(255) not null",
+            "email": "varchar(255) not null",
+            "password": "varchar(255) not null",
+            "created_at": "timestamp not null default now()",
+            "updated_at": "timestamp not null default now()",
+            "subscribers_count": "integer not null default 0"
+        },
+        "additional_expressions": [],
+        "dependencies": [
+            "Schema:public"
+        ],
+        "type": "Table"
+    },
+    {
+        "name": "idx_user_email",
+        "ref": "Index:idx_user_email",
+        "on": "\"user\"",
+        "using": "btree",
+        "expressions": [
+            "\"email\""
+        ],
+        "dependencies": [
+            "Schema:public|Table:user"
+        ],
+        "type": "Index"
+    },
+    {
+        "name": "subscription",
+        "schema": "Schema:public",
+        "ref": "Schema:public|Table:subscription",
+        "columns": {
+            "subscriber_id": "uuid not null references \"user\"(\"id\")",
+            "subscribed_to_id": "uuid not null references \"user\"(\"id\")"
+        },
+        "additional_expressions": [
+            "PRIMARY KEY (subscriber_id, subscribed_to_id)"
+        ],
+        "dependencies": [
+            "Schema:public|Table:user"
+        ],
+        "type": "Table"
+    },
+    {
+        "name": "handle_new_subscription",
+        "schema": "Schema:public",
+        "ref": "Schema:public|Function:handle_new_subscription.-1453332063181544967",
+        "returns": "trigger",
+        "language": "plpgsql",
+        "body": "\n    begin\n        update \"user\" set \"subscribers_count\" = \"subscribers_count\" + 1 where \"id\" = new.\"subscribed_to_id\";\n    end;\n    ",
+        "args": {
+            "new_subscription_id": "uuid not null"
+        },
+        "dependencies": [
+            "Schema:public|Table:subscription",
+            "Schema:public|Table:user"
+        ],
+        "type": "Function"
+    },
+    {
+        "name": "handle_new_subscription_trigger",
+        "ref": "Trigger:handle_new_subscription_trigger",
+        "before": "insert or update",
+        "after": null,
+        "instead_of": null,
+        "on": "\"subscription\"",
+        "function": "\"handle_new_subscription\"()",
+        "procedure": "",
+        "dependencies": [
+            "Schema:public|Table:subscription",
+            "Schema:public|Function:handle_new_subscription.-1453332063181544967"
+        ],
+        "type": "Trigger"
+    }
+]

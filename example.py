@@ -1,6 +1,6 @@
+import json
 from typing import OrderedDict
 from rawmigrate.core import DB
-from rawmigrate.core import SqlFormatOption
 
 from rawmigrate.entity_manager import EntityManager
 
@@ -60,16 +60,28 @@ test = handle_new_subscription.then.Trigger(
     function=f"{handle_new_subscription}()",  # or procedure=
 )
 
+# print(test.ref, "->", test.dependency_refs)
+# print(handle_new_subscription.ref, "->", handle_new_subscription.dependency_refs)
+# print(subscription.ref, "->", subscription.dependency_refs)
+# print(user.ref, "->", user.dependency_refs)
 
-print(test.ref, "->", test.dependency_refs)
-print(handle_new_subscription.ref, "->", handle_new_subscription.dependency_refs)
-print(subscription.ref, "->", subscription.dependency_refs)
-print(user.ref, "->", user.dependency_refs)
-
-print("======================")
-print(format(handle_new_subscription.body, SqlFormatOption.SQL_META))
-print("======================")
+# print("======================")
+# print(format(handle_new_subscription.body, SqlFormatOption.SQL_META))
+# print("======================")
 
 
 for node in root.registry.topological_order():
+    print(node.entity.ref, "->", node.entity.dependency_refs)
+
+
+with open("export.json", "w") as f:
+    json.dump(root.export_dicts(), f, indent=4)
+
+
+new_root = EntityManager.create_root(db)
+with open("export.json", "r") as f:
+    data = json.load(f)
+    new_root.import_dicts(data)
+
+for node in new_root.registry.topological_order():
     print(node.entity.ref, "->", node.entity.dependency_refs)

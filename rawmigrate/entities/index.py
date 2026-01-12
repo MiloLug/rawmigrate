@@ -13,6 +13,7 @@ class Index(SqlIdentifier, DBEntity):
         self,
         manager: "EntityManager",
         entity_ref: str,
+        dependencies: set[str] | None,
         name: str,
         on: SqlText,
         using: SqlText,
@@ -22,7 +23,7 @@ class Index(SqlIdentifier, DBEntity):
         self.on = on
         self.using = using
         self.expressions = expressions
-        DBEntity.__init__(self, manager, entity_ref)
+        DBEntity.__init__(self, manager, entity_ref, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -38,7 +39,8 @@ class Index(SqlIdentifier, DBEntity):
     ):
         return cls(
             manager=_manager,
-            entity_ref=_entity_ref or cls.create_ref(_manager, _name),
+            entity_ref=_entity_ref or cls.create_ref(_name),
+            dependencies=_manager.dependency_refs,
             name=_name,
             on=SqlText(_manager.db.syntax, on),
             using=SqlText(_manager.db.syntax, using),
@@ -58,17 +60,20 @@ class Index(SqlIdentifier, DBEntity):
     def to_dict(self) -> dict:
         return {
             "name": self.name,
+            "ref": self.ref,
             "on": self.on.sql,
             "using": self.using.sql,
             "expressions": [expression.sql for expression in self.expressions],
+            "dependencies": list(self.dependency_refs),
         }
 
     @override
     @classmethod
-    def from_dict(cls, manager: "EntityManager", entity_ref: str, data: dict):
+    def from_dict(cls, manager: "EntityManager", data: dict):
         return cls(
             manager=manager,
-            entity_ref=entity_ref,
+            entity_ref=data["ref"],
+            dependencies=set(data["dependencies"]),
             name=data["name"],
             on=SqlText(manager.db.syntax, data["on"]),
             using=SqlText(manager.db.syntax, data["using"]),

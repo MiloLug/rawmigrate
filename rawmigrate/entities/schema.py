@@ -7,9 +7,15 @@ if TYPE_CHECKING:
 
 
 class Schema(SqlIdentifier, DBEntity):
-    def __init__(self, manager: "EntityManager", entity_ref: str, name: str):
+    def __init__(
+        self,
+        manager: "EntityManager",
+        entity_ref: str,
+        dependencies: set[str] | None,
+        name: str,
+    ):
         self.name = name
-        DBEntity.__init__(self, manager, entity_ref)
+        DBEntity.__init__(self, manager, entity_ref, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -21,13 +27,10 @@ class Schema(SqlIdentifier, DBEntity):
     ):
         return cls(
             manager=_manager,
-            entity_ref=_entity_ref or cls.create_ref(_manager, _name, use_schema=False),
+            entity_ref=_entity_ref or cls.create_ref(_name),
+            dependencies=_manager.dependency_refs,
             name=_name,
         )
-
-    @property
-    def schema(self) -> "Schema | None":
-        return self._manager.schema
 
     @override
     def _infer_dependency_refs(self) -> set[str]:
@@ -35,13 +38,18 @@ class Schema(SqlIdentifier, DBEntity):
 
     @override
     def to_dict(self) -> dict:
-        return {"name": self.name}
+        return {
+            "name": self.name,
+            "ref": self.ref,
+            "dependencies": list(self.dependency_refs),
+        }
 
     @override
     @classmethod
-    def from_dict(cls, manager: "EntityManager", entity_ref: str, data: dict):
+    def from_dict(cls, manager: "EntityManager", data: dict):
         return cls(
             manager=manager,
-            entity_ref=entity_ref,
+            entity_ref=data["ref"],
+            dependencies=set(data["dependencies"]),
             name=data["name"],
         )

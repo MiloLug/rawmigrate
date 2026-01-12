@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self
+from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self, cast
 from rawmigrate.core import DB
 import graphlib
 
@@ -64,15 +64,32 @@ class EntityRegistry:
 
     def topological_order(self) -> Generator[EntityNode]:
         """
-        Return topological order of the entities in the registry.
+        Return topologically sorted nodes from the registry.
         """
         return (
             self._registry[ref]
             for ref in graphlib.TopologicalSorter(self._ref_adjacency).static_order()
         )
 
-    def get_node(self, ref: str) -> EntityNode:
-        return self._registry[ref]
+    def get_node(self, ref: str, allow_none: bool = False) -> EntityNode | None:
+        try:
+            return self._registry[ref]
+        except KeyError:
+            if not allow_none:
+                raise ValueError(f"Node for Entity {ref} not found")
+            return None
+
+    def get_entity[T: DBEntity](self, ref: str, allow_none: bool = False) -> T | None:
+        try:
+            entity = self._registry[ref].entity
+            return cast(T, entity)
+        except KeyError:
+            if not allow_none:
+                raise ValueError(f"Entity {ref} not found")
+            return None
+
+    def __contains__(self, ref: str) -> bool:
+        return ref in self._registry
 
 
 class EntityManager:
@@ -127,6 +144,14 @@ class EntityManager:
         self.Trigger = self._wrap_entity_factory(Trigger.create)
         self.Schema = self._wrap_entity_factory(Schema.create)
 
+        self._entity_classes: dict[str, type[DBEntity]] = {
+            "Table": Table,
+            "Index": Index,
+            "Function": Function,
+            "Trigger": Trigger,
+            "Schema": Schema,
+        }
+
     def _wrap_entity_factory[**P, E: DBEntity](
         self,
         entity_factory: Callable[Concatenate[Self, P], E],
@@ -134,6 +159,8 @@ class EntityManager:
         @functools.wraps(entity_factory)
         def factory(*args, **kwargs) -> E:
             entity = entity_factory(self, *args, **kwargs)
+            if entity.ref in self._registry:
+                raise ValueError(f"Entity {entity.ref} already registered")
             self._registry.register(entity)
             return entity
 
@@ -202,3 +229,18 @@ class EntityManager:
             A NEW entity manager
         """
         return EntityManager(parent=self, schema=schema)
+
+    def export_dicts(self) -> list[dict]:
+        return [
+            node.entity.to_dict()
+            | {
+                "type": node.entity.__class__.__name__,
+            }
+            for node in self.registry.topological_order()
+        ]
+
+    def import_dicts(self, data: list[dict]):
+        for entity_data in data:
+            entity_class = self._entity_classes[entity_data["type"]]
+            entity = entity_class.from_dict(self, entity_data)
+            self._registry.register(entity)
