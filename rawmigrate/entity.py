@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, ClassVar, Iterable, override
 
 from rawmigrate.utils import hash_str
 
@@ -9,7 +9,19 @@ if TYPE_CHECKING:
     from rawmigrate.entity_manager import EntityManager
 
 
+class EntityBundle[T: DBEntity]:
+    def __init__(self, main: T, children: Iterable["DBEntity"] = ()):
+        self.main = main
+        self.children = list(children)
+
+    @property
+    def all(self) -> list["DBEntity"]:
+        return [self.main, *self.children]
+
+
 class DBEntity(ABC):
+    manage_export: ClassVar[bool] = True
+
     def __init__(
         self, manager: "EntityManager", entity_ref: str, dependencies: set[str] | None
     ):
@@ -19,7 +31,7 @@ class DBEntity(ABC):
 
     @classmethod
     @abstractmethod
-    def create[R: DBEntity](cls: type[R], *args, **kwargs) -> R: ...
+    def create[R: DBEntity](cls: type[R], *args, **kwargs) -> EntityBundle[R]: ...
 
     @classmethod
     def create_ref(cls: type["DBEntity"], name: str, *args, **kwargs) -> str:
@@ -42,8 +54,8 @@ class DBEntity(ABC):
     def manager(self) -> "EntityManager":
         return self._manager
 
-    @abstractmethod
-    def _infer_dependency_refs(self) -> set[str]: ...
+    def _infer_dependency_refs(self) -> set[str]:
+        return set()
 
     @property
     def then(self) -> "EntityManager":
@@ -56,7 +68,7 @@ class DBEntity(ABC):
     @abstractmethod
     def from_dict[R: DBEntity](
         cls: type[R], manager: "EntityManager", data: dict
-    ) -> R: ...
+    ) -> EntityBundle[R]: ...
 
     def __hash__(self) -> int:
         return hash_str(self.ref)

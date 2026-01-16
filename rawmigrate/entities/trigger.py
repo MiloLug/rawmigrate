@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from rawmigrate.core import SqlText, SqlTextLike
-from rawmigrate.entity import DBEntity
+from rawmigrate.entity import DBEntity, EntityBundle
 from rawmigrate.core import SqlIdentifier
 
 if TYPE_CHECKING:
@@ -55,17 +55,19 @@ class Trigger(SqlIdentifier, DBEntity):
         procedure: SqlTextLike | None = None,
     ):
         entity_ref = _entity_ref or cls.create_ref(_name)
-        return cls(
-            manager=_manager,
-            entity_ref=entity_ref,
-            dependencies=_manager.dependency_refs,
-            name=_name,
-            before=before,
-            after=after,
-            instead_of=instead_of,
-            on=SqlText(_manager.db.syntax, on),
-            function=SqlText(_manager.db.syntax, function) if function else None,
-            procedure=SqlText(_manager.db.syntax, procedure) if procedure else None,
+        return EntityBundle(
+            cls(
+                manager=_manager,
+                entity_ref=entity_ref,
+                dependencies=_manager.dependency_refs,
+                name=_name,
+                before=before,
+                after=after,
+                instead_of=instead_of,
+                on=SqlText(_manager.db.syntax, on),
+                function=SqlText(_manager.db.syntax, function) if function else None,
+                procedure=SqlText(_manager.db.syntax, procedure) if procedure else None,
+            )
         )
 
     def _infer_dependency_refs(self) -> set[str]:
@@ -92,23 +94,25 @@ class Trigger(SqlIdentifier, DBEntity):
     @override
     @classmethod
     def from_dict(cls, manager: "EntityManager", data: dict):
-        return cls(
-            manager=manager,
-            entity_ref=data["ref"],
-            dependencies=set(data["dependencies"]),
-            name=data["name"],
-            before=data["before"],
-            after=data["after"],
-            instead_of=data["instead_of"],
-            on=SqlText(manager.db.syntax, data["on"]),
-            function=(
-                SqlText(manager.db.syntax, data["function"])
-                if data["function"]
-                else None
-            ),
-            procedure=(
-                SqlText(manager.db.syntax, data["procedure"])
-                if data["procedure"]
-                else None
-            ),
+        return EntityBundle(
+            cls(
+                manager=manager,
+                entity_ref=data["ref"],
+                dependencies=set(data["dependencies"]),
+                name=data["name"],
+                before=data["before"],
+                after=data["after"],
+                instead_of=data["instead_of"],
+                on=SqlText(manager.db.syntax, data["on"]),
+                function=(
+                    SqlText(manager.db.syntax, data["function"])
+                    if data["function"]
+                    else None
+                ),
+                procedure=(
+                    SqlText(manager.db.syntax, data["procedure"])
+                    if data["procedure"]
+                    else None
+                ),
+            )
         )

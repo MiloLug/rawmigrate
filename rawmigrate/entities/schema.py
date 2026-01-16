@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, override
 from rawmigrate.core import SqlIdentifier
-from rawmigrate.entity import DBEntity
+from rawmigrate.entity import DBEntity, EntityBundle
 
 if TYPE_CHECKING:
     from rawmigrate.entity_manager import EntityManager
@@ -25,11 +25,13 @@ class Schema(SqlIdentifier, DBEntity):
         _name: str,
         _entity_ref: str = "",
     ):
-        return cls(
-            manager=_manager,
-            entity_ref=_entity_ref or cls.create_ref(_name),
-            dependencies=_manager.dependency_refs,
-            name=_name,
+        return EntityBundle(
+            cls(
+                manager=_manager,
+                entity_ref=_entity_ref or cls.create_ref(_name),
+                dependencies=_manager.dependency_refs,
+                name=_name,
+            )
         )
 
     @override
@@ -47,9 +49,11 @@ class Schema(SqlIdentifier, DBEntity):
     @override
     @classmethod
     def from_dict(cls, manager: "EntityManager", data: dict):
-        return cls(
-            manager=manager,
-            entity_ref=data["ref"],
-            dependencies=set(data["dependencies"]),
-            name=data["name"],
+        return EntityBundle(
+            cls(
+                manager=manager,
+                entity_ref=data["ref"],
+                dependencies=set(data["dependencies"]),
+                name=data["name"],
+            )
         )

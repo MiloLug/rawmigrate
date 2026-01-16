@@ -9,6 +9,7 @@ from rawmigrate.entities.index import Index
 from rawmigrate.entities.function import Function
 from rawmigrate.entities.trigger import Trigger
 from rawmigrate.entities.schema import Schema
+from rawmigrate.entity import EntityBundle
 
 if TYPE_CHECKING:
     from rawmigrate.entity import DBEntity
@@ -78,7 +79,7 @@ class EntityRegistry:
             if not allow_none:
                 raise ValueError(f"Node for Entity {ref} not found")
             return None
-    
+
     def get_entity(self, ref: str, allow_none: bool = False) -> DBEntity | None:
         try:
             return self._registry[ref].entity
@@ -86,7 +87,7 @@ class EntityRegistry:
             if not allow_none:
                 raise ValueError(f"Entity {ref} not found")
             return None
-    
+
     def __contains__(self, ref: str) -> bool:
         return ref in self._registry
 
@@ -153,15 +154,17 @@ class EntityManager:
 
     def _wrap_entity_factory[**P, E: DBEntity](
         self,
-        entity_factory: Callable[Concatenate[Self, P], E],
+        entity_factory: Callable[Concatenate[Self, P], EntityBundle[E]],
     ) -> Callable[P, E]:
         @functools.wraps(entity_factory)
         def factory(*args, **kwargs) -> E:
-            entity = entity_factory(self, *args, **kwargs)
-            if entity.ref in self._registry:
-                raise ValueError(f"Entity {entity.ref} already registered")
-            self._registry.register(entity)
-            return entity
+            bundle = entity_factory(self, *args, **kwargs)
+            for entity in bundle.all:
+                if entity.ref in self._registry:
+                    raise ValueError(f"Entity {entity.ref} already registered")
+            for entity in bundle.all:
+                self._registry.register(entity)
+            return bundle.main
 
         return factory
 
@@ -231,14 +234,17 @@ class EntityManager:
 
     def export_dicts(self) -> list[dict]:
         return [
-            node.entity.to_dict() | {
-                "type": node.entity.__class__.__name__,
+            node.entity.to_dict()
+            | {
+                "__type__": node.entity.__class__.__name__,
             }
             for node in self.registry.topological_order()
+            if node.entity.manage_export
         ]
-    
+
     def import_dicts(self, data: list[dict]):
         for entity_data in data:
-            entity_class = self._entity_classes[entity_data["type"]]
-            entity = entity_class.from_dict(self, entity_data)
-            self._registry.register(entity)
+            entity_class = self._entity_classes[entity_data["__type__"]]
+            bundle = entity_class.from_dict(self, entity_data)
+            for entity in bundle.all:
+                self._registry.register(entity)

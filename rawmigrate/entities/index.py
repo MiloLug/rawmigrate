@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, override
 
 from rawmigrate.core import SqlText, SqlTextLike
-from rawmigrate.entity import DBEntity
+from rawmigrate.entity import DBEntity, EntityBundle
 from rawmigrate.core import SqlIdentifier
 
 if TYPE_CHECKING:
@@ -37,16 +37,19 @@ class Index(SqlIdentifier, DBEntity):
         using: SqlTextLike,
         expressions: list[SqlTextLike],
     ):
-        return cls(
-            manager=_manager,
-            entity_ref=_entity_ref or cls.create_ref(_name),
-            dependencies=_manager.dependency_refs,
-            name=_name,
-            on=SqlText(_manager.db.syntax, on),
-            using=SqlText(_manager.db.syntax, using),
-            expressions=[
-                SqlText(_manager.db.syntax, expression) for expression in expressions
-            ],
+        return EntityBundle(
+            cls(
+                manager=_manager,
+                entity_ref=_entity_ref or cls.create_ref(_name),
+                dependencies=_manager.dependency_refs,
+                name=_name,
+                on=SqlText(_manager.db.syntax, on),
+                using=SqlText(_manager.db.syntax, using),
+                expressions=[
+                    SqlText(_manager.db.syntax, expression)
+                    for expression in expressions
+                ],
+            )
         )
 
     def _infer_dependency_refs(self) -> set[str]:
@@ -70,15 +73,17 @@ class Index(SqlIdentifier, DBEntity):
     @override
     @classmethod
     def from_dict(cls, manager: "EntityManager", data: dict):
-        return cls(
-            manager=manager,
-            entity_ref=data["ref"],
-            dependencies=set(data["dependencies"]),
-            name=data["name"],
-            on=SqlText(manager.db.syntax, data["on"]),
-            using=SqlText(manager.db.syntax, data["using"]),
-            expressions=[
-                SqlText(manager.db.syntax, expression)
-                for expression in data["expressions"]
-            ],
+        return EntityBundle(
+            cls(
+                manager=manager,
+                entity_ref=data["ref"],
+                dependencies=set(data["dependencies"]),
+                name=data["name"],
+                on=SqlText(manager.db.syntax, data["on"]),
+                using=SqlText(manager.db.syntax, data["using"]),
+                expressions=[
+                    SqlText(manager.db.syntax, expression)
+                    for expression in data["expressions"]
+                ],
+            )
         )
