@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from rawmigrate.entity_manager import EntityManager
 
 
+# TODO: IMPORTANT: This is a temporary implementation of column, IMPLEMENT THE FULL ONE
+
 class Column(SqlIdentifier, DBEntity):
     manage_export = False
 

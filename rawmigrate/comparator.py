@@ -12,13 +12,33 @@ class NodeMutationType(StrEnum):
 
 
 class Comparator[T: DBEntity](ABC):
-    def __init__(self, old: T, new: T):
+    """
+    Used to compare two versions of an entity and determine the exact mutations
+    that need to be applied to the old entity to match the new one.
+    """
+
+    def __init__(self, old: T, new: T, old_parents: dict[str, "Comparator"] | None = None):
+        """
+        Initializes the comparator.
+        
+        Args:
+            old: The old entity to compare.
+            new: The new entity to compare.
+            parents: A dictionary of comparators for the dependencies of the old entity.
+        """
         self.old = old
         self.new = new
+        self.old_parents = old_parents or {}
+        self._mutation_type: NodeMutationType | None = None
+    
+    @abstractmethod
+    def _compute_mutation_type(self) -> NodeMutationType: ...
 
     @property
-    @abstractmethod
-    def mutation_type(self) -> NodeMutationType: ...
+    def mutation_type(self) -> NodeMutationType:
+        if self._mutation_type is None:
+            self._mutation_type = self._compute_mutation_type()
+        return self._mutation_type
 
 
 """
@@ -71,4 +91,20 @@ for node in dependency_order:
             operations.append(node.to_create_sql())
         case ALTER:
             operations.extend(node.to_alter_sql())
+"""
+
+
+
+"""
+NEW ALGO:
+
+root = dependencies
+head = dependants
+
+1. in NEW -> from root to head, collect ALTER/CREATE/RECREATE
+2. in NEW -> from head to root, insert DROP of RECREATE
+3. in NEW -> from root to head, insert (for each NODE):
+    - furthest possible (by chain) DROP of NODE.dependants in OLD, that don't exist in NEW
+    - ALTER/CREATE of NODE
+4. in OLD -> from head to root, insert DROP - in case there are any stand-alone nodes left
 """

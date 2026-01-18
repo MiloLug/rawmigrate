@@ -1,6 +1,7 @@
 from rawmigrate.comparator import Comparator, NodeMutationType
-from rawmigrate.entities.function import Function
+from rawmigrate.entities.schema import Schema
 
-class FunctionComparator(Comparator[Function]):
+
+class SchemaComparator(Comparator[Schema]):
     def _compute_mutation_type(self) -> NodeMutationType:
         return NodeMutationType.UNCHANGED
