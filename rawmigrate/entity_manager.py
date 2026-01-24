@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Generator, Self
+from typing import TYPE_CHECKING, Callable, Concatenate, Iterable, Self
 from rawmigrate.core import DB
 import graphlib
 
@@ -25,13 +25,14 @@ class EntityNode:
         return self.entity.__hash__()
 
     def __eq__(self, other: object) -> bool:
-        return self.entity.__eq__(other)
+        if not isinstance(other, EntityNode):
+            return False
+        return self.entity.__eq__(other.entity)
 
 
 class EntityRegistry:
     def __init__(self):
         self._registry: dict[str, EntityNode] = dict()
-        self._ref_adjacency: dict[str, set[str]] = dict()
 
     def register(self, entity: DBEntity):
         """
@@ -45,7 +46,6 @@ class EntityRegistry:
             dependency.dependants.add(node)
 
         self._registry[entity.ref] = node
-        self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
 
     def update_node(self, entity: DBEntity):
         """
@@ -61,16 +61,31 @@ class EntityRegistry:
             dependency.dependants.add(node)
         # No need to recompute dependants,
         # since changing a node can't make its dependants not-depend on it
-        self._ref_adjacency[entity.ref] = entity.dependency_refs.copy()
 
-    def topological_order(self) -> Generator[EntityNode]:
+    def iter_topological(self) -> Iterable[EntityNode]:
         """
         Return topologically sorted nodes from the registry.
         """
-        return (
-            self._registry[ref]
-            for ref in graphlib.TopologicalSorter(self._ref_adjacency).static_order()
-        )
+        return graphlib.TopologicalSorter(
+            {node: node.dependencies for node in self._registry.values()}
+        ).static_order()
+
+    def iter_branches(self, head: str) -> Iterable[tuple[EntityNode, EntityNode]]:
+        """
+        Iterate over the branches of the tree, moving towards the given head.
+
+        Returns:
+            An iterable of tuples, where the first element is the parent node and the second element is the child node.
+        """
+
+        def _iter(visited: set[EntityNode], node: EntityNode):
+            for dependant in node.dependants:
+                if dependant not in visited:
+                    visited.add(dependant)
+                    yield from _iter(visited, dependant)
+                    yield (node, dependant)
+
+        return _iter(set(), self._registry[head])
 
     def get_node(self, ref: str, allow_none: bool = False) -> EntityNode | None:
         try:
@@ -238,7 +253,7 @@ class EntityManager:
             | {
                 "__type__": node.entity.__class__.__name__,
             }
-            for node in self.registry.topological_order()
+            for node in self.registry.iter_topological()
             if node.entity.manage_export
         ]
 

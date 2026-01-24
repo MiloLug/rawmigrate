@@ -4,4 +4,11 @@ from .schema import SchemaComparator
 from .table import ColumnComparator, TableComparator
 from .trigger import TriggerComparator
 
-__all__ = ["FunctionComparator", "IndexComparator", "SchemaComparator", "TableComparator", "TriggerComparator", "ColumnComparator"]
+__all__ = [
+    "FunctionComparator",
+    "IndexComparator",
+    "SchemaComparator",
+    "TableComparator",
+    "TriggerComparator",
+    "ColumnComparator",
+]

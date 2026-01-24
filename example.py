@@ -3,6 +3,7 @@ from typing import OrderedDict
 from rawmigrate.core import DB
 
 from rawmigrate.entity_manager import EntityManager
+from rawmigrate.migrator import Migrator
 
 db = DB()
 root = EntityManager.create_root(db)
@@ -15,7 +16,6 @@ user = root.Table(
     name="varchar(255) not null",
     email="varchar(255) not null",
     password="varchar(255) not null",
-    created_at="timestamp not null default now()",
     updated_at="timestamp not null default now()",
     subscribers_count="integer not null default 0",
 )
@@ -38,7 +38,7 @@ subscription = (
 
 # Can omit .then or .after here for example, because of the dependency recognition
 handle_new_subscription = root.Function(
-    "handle_new_subscription",
+    "handle_new_subscriptionCHANGED_NAME",
     returns="trigger",
     language="plpgsql",  # can be omitted, default value here
     args=OrderedDict(
@@ -70,18 +70,27 @@ test = handle_new_subscription.then.Trigger(
 # print("======================")
 
 
-for node in root.registry.topological_order():
-    print(node.entity.ref, "->", node.entity.dependency_refs)
+# for node in root.registry.topological_order():
+#     print(node.entity.ref, "->", node.entity.dependency_refs)
 
 
-with open("export.json", "w") as f:
-    json.dump(root.export_dicts(), f, indent=4)
+# with open("export.json", "w") as f:
+#    json.dump(root.export_dicts(), f, indent=4)
 
 
-new_root = EntityManager.create_root(db)
+# new_root = EntityManager.create_root(db)
+# with open("export.json", "r") as f:
+#     data = json.load(f)
+#     new_root.import_dicts(data)
+
+# for node in new_root.registry.topological_order():
+#     print(node.entity.ref, "->", node.entity.dependency_refs)
+
+
+old_root = EntityManager.create_root(db)
 with open("export.json", "r") as f:
     data = json.load(f)
-    new_root.import_dicts(data)
+    old_root.import_dicts(data)
 
-for node in new_root.registry.topological_order():
-    print(node.entity.ref, "->", node.entity.dependency_refs)
+migrator = Migrator(old_root.registry, root.registry)
+migrator.test()
