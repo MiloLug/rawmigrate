@@ -1,6 +1,14 @@
 from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Iterable, Literal, Self, overload
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Concatenate,
+    Iterable,
+    Literal,
+    Self,
+    overload,
+)
 from rawmigrate.core import DB
 import graphlib
 
