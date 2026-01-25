@@ -17,7 +17,7 @@ user = root.Table(
     email="varchar(255) not null",
     password="varchar(255) not null",
     updated_at="timestamp not null default now()",
-    subscribers_count="integer not null default 0",
+    subscribers_countt="integer not null default 0",
 )
 
 root.after(user).Index(
@@ -38,7 +38,7 @@ subscription = (
 
 # Can omit .then or .after here for example, because of the dependency recognition
 handle_new_subscription = root.Function(
-    "handle_new_subscriptionCHANGED_NAME",
+    "handle_new_subscription",
     returns="trigger",
     language="plpgsql",  # can be omitted, default value here
     args=OrderedDict(
@@ -47,13 +47,13 @@ handle_new_subscription = root.Function(
     # Like this:
     body=f"""
     begin
-        update {user} set {user.c.subscribers_count} = {user.c.subscribers_count} + 1 where {user.c.id} = new.{subscription.c.subscribed_to_id};
+        update {user} set {user.c.subscribers_countt} = {user.c.subscribers_countt} + 1 where {user.c.id} = new.{subscription.c.subscribed_to_id};
     end;
     """,
     # Or just begin=... to omit begin+end, for convenience.
 )
 
-test = handle_new_subscription.then.Trigger(
+handle_new_subscription.then.Trigger(
     "handle_new_subscription_trigger",
     before="insert or update",  # as well as after=, instead_of=
     on=subscription,  # it will accept any string-like

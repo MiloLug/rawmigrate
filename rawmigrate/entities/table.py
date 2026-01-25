@@ -21,12 +21,15 @@ class Column(SqlIdentifier, DBEntity):
         self,
         manager: "EntityManager",
         entity_ref: str,
+        dependencies: set[str] | None,
         table_ref: str,
         name: str,
+        definition: SqlText,
     ):
-        self.name = name
         self.table_ref = table_ref
-        DBEntity.__init__(self, manager, entity_ref, {table_ref})
+        self.name = name
+        self.definition = definition
+        DBEntity.__init__(self, manager, entity_ref, dependencies)
         SqlIdentifier.__init__(self, manager.db.syntax, [name], [entity_ref])
 
     @classmethod
@@ -35,14 +38,25 @@ class Column(SqlIdentifier, DBEntity):
         _manager: "EntityManager",
         table_ref: str,
         name: str,
+        definition: SqlTextLike,
     ):
-        return cls(_manager, f"{table_ref}|{cls.create_ref(name)}", table_ref, name)
+        cleaned_definition = SqlText(_manager.db.syntax, definition)
+        return cls(
+            manager=_manager,
+            entity_ref=f"{table_ref}|{cls.create_ref(name)}",
+            dependencies={table_ref} | cleaned_definition.references,
+            table_ref=table_ref,
+            name=name,
+            definition=cleaned_definition,
+        )
 
     @override
     def to_dict(self) -> dict:
         return {
             "name": self.name,
             "ref": self.ref,
+            "definition": self.definition.sql,
+            "dependencies": list(self.dependency_refs - {self.table_ref}),
         }
 
     @override
@@ -52,7 +66,9 @@ class Column(SqlIdentifier, DBEntity):
             manager=manager,
             entity_ref=data["ref"],
             table_ref=data["table_ref"],
+            dependencies=set(data["dependencies"]),
             name=data["name"],
+            definition=SqlText(manager.db.syntax, data["definition"]),
         )
 
 
@@ -62,18 +78,21 @@ class TableColumnsAccessor:
 
     def __getitem__(self, name: str) -> Column:
         return cast(
-            Column, self.table.manager.registry.get_entity(self.table._columns[name][0])
+            Column, self.table.manager.registry.get_entity(self.table._columns[name])
         )
 
     def __getattr__(self, name: str) -> Column:
         return cast(
-            Column, self.table.manager.registry.get_entity(self.table._columns[name][0])
+            Column, self.table.manager.registry.get_entity(self.table._columns[name])
         )
 
-    def __iter__(self) -> Iterator[tuple[str, str, SqlText]]:
-        return (
-            (col_name, column_ref, text)
-            for col_name, (column_ref, text) in self.table._columns.items()
+    def __iter__(self) -> Iterator[tuple[str, Column]]:
+        return cast(
+            Iterator[tuple[str, Column]],
+            (
+                (name, self.table.manager.registry.get_entity(ref))
+                for name, ref in self.table._columns.items()
+            ),
         )
 
     def __len__(self) -> int:
@@ -88,7 +107,7 @@ class Table(SqlIdentifier, SchemaDependantEntity):
         schema: "DBEntity | None",
         dependencies: set[str] | None,
         name: str,
-        columns: dict[str, tuple[str, SqlText]],
+        columns: dict[str, str],
         additional_expressions: list[SqlText],
     ):
         self._name = name
@@ -109,22 +128,22 @@ class Table(SqlIdentifier, SchemaDependantEntity):
     ):
         entity_ref = _entity_ref or cls.create_ref(_name, schema=_manager.schema)
         column_entities = {
-            name: Column.create(_manager, entity_ref, name) for name in columns.keys()
+            name: Column.create(_manager, entity_ref, name, definition)
+            for name, definition in columns.items()
         }
 
         table = cls(
             manager=_manager,
             entity_ref=entity_ref,
             schema=_manager.schema,
-            dependencies=_manager.dependency_refs,
-            name=_name,
-            columns={
-                column_name: (
-                    column_entities[column_name].ref,
-                    SqlText(_manager.db.syntax, column_definition),
+            dependencies=(
+                _manager.dependency_refs.union(
+                    *(column.dependency_refs for column in column_entities.values())
                 )
-                for column_name, column_definition in columns.items()
-            },
+                - {entity_ref}
+            ),
+            name=_name,
+            columns={name: column.ref for name, column in column_entities.items()},
             additional_expressions=[
                 SqlText(_manager.db.syntax, expression)
                 for expression in _table_expressions or []
@@ -140,9 +159,9 @@ class Table(SqlIdentifier, SchemaDependantEntity):
         self._manager.update_refs(self)
         return self
 
+    @override
     def _infer_dependency_refs(self) -> set[str]:
         deps = set[str]().union(
-            *(value.references for _, value in self._columns.values()),
             *(expression.references for expression in self._additional_expressions),
         )
         return deps
@@ -154,11 +173,8 @@ class Table(SqlIdentifier, SchemaDependantEntity):
             "schema": self._schema.ref if self._schema else None,
             "ref": self.ref,
             "columns": {
-                column_name: self.c[column_name].to_dict()
-                | {
-                    "text": text.sql,
-                }
-                for column_name, (_, text) in self._columns.items()
+                column_name: self.manager.registry.get_entity(ref).to_dict()
+                for column_name, ref in self._columns.items()
             },
             "additional_expressions": [
                 expression.sql for expression in self._additional_expressions
@@ -177,11 +193,8 @@ class Table(SqlIdentifier, SchemaDependantEntity):
                 dependencies=set(data["dependencies"]),
                 name=data["name"],
                 columns={
-                    column_name: (
-                        data["ref"],
-                        SqlText(manager.db.syntax, data["text"]),
-                    )
-                    for column_name, data in data["columns"].items()
+                    col_name: col_data["ref"]
+                    for col_name, col_data in data["columns"].items()
                 },
                 additional_expressions=[
                     SqlText(manager.db.syntax, expression)

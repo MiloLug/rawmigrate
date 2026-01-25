@@ -48,14 +48,19 @@ class DBEntity(ABC):
 
     @property
     def dependency_refs(self) -> set[str]:
-        return self._infer_dependency_refs() | self._explicit_dependencies
+        dynamic = self._infer_dependency_refs()
+        return (
+            (dynamic | self._explicit_dependencies)
+            if dynamic
+            else self._explicit_dependencies
+        )
 
     @property
     def manager(self) -> "EntityManager":
         return self._manager
 
-    def _infer_dependency_refs(self) -> set[str]:
-        return set()
+    def _infer_dependency_refs(self) -> set[str] | None:
+        return None
 
     @property
     def then(self) -> "EntityManager":

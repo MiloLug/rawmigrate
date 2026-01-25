@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import functools
-from typing import TYPE_CHECKING, Callable, Concatenate, Iterable, Self
+from typing import TYPE_CHECKING, Callable, Concatenate, Iterable, Literal, Self, overload
 from rawmigrate.core import DB
 import graphlib
 
@@ -94,6 +94,12 @@ class EntityRegistry:
             if not allow_none:
                 raise ValueError(f"Node for Entity {ref} not found")
             return None
+
+    @overload
+    def get_entity(self, ref: str, allow_none: Literal[True]) -> DBEntity | None: ...
+
+    @overload
+    def get_entity(self, ref: str, allow_none: Literal[False] = False) -> DBEntity: ...
 
     def get_entity(self, ref: str, allow_none: bool = False) -> DBEntity | None:
         try:
